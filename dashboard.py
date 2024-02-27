@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.graph_objs as go
 import os
 import numpy as np
+import yfinance as yf
 
 # Initialize session state variables
 if 'home_page' not in st.session_state:
@@ -145,7 +146,37 @@ def calculate_and_display_mape(data, ticker):
 # Function to load data and visualize it
 def load_data(ticker):
     file_path = f'./ensemble/{ticker}_merged.csv'
+
+    stock_info = yf.Ticker(str(ticker))
+    stock_details = stock_info.info
+
+    string_name = stock_details['longName']
+    st.header('**%s**' % string_name)
+
+    sector_name = stock_details['sector']
+    st.subheader('Sector: %s' % sector_name)
     
+    # Exander for details of stock from yahoo finance
+    with st.expander(f"Stock Details for {ticker}"):
+        st.write(f"Summary: {stock_details.get('longBusinessSummary', 'N/A')}")
+
+        # Date range selection
+        st.write("**Select Date Range for Stock Data**")
+        start_date, end_date = st.columns(2)
+        with start_date:
+            start_date = st.date_input("Start date", value=pd.to_datetime('2023-01-01'))
+        with end_date:
+            end_date = st.date_input("End date", value=pd.to_datetime('today'))
+        
+        # Fetch and display the stock data
+        data = stock_info.history(start=start_date, end=end_date)
+        fig = go.Figure()
+        # fig.add_trace(go.Scatter(x=data.index, y=data['Close'], mode='lines', name='Close Price'))
+        fig.add_trace(go.Candlestick(x=data.index,open=data['Open'],high=data['High'],low=data['Low'],close=data['Close']))
+        fig.update_layout(xaxis_rangeslider_visible=False)
+        fig.update_layout(title=f'{ticker} Closing Price', xaxis_title='Date', yaxis_title='Price (USD)')
+        st.plotly_chart(fig, use_container_width=True)
+
     if ticker == 'Select a ticker':
         return
 
@@ -177,7 +208,7 @@ def load_data(ticker):
             annotation_text="Test Set", annotation_position="top left",
             fillcolor="blue", opacity=0.2, line_width=0
         )
-        
+
         # Set graph layout
         fig.update_layout(title_text=f"{ticker} Stock Price Prediction", xaxis_title='Date', yaxis_title='Price')
         
@@ -192,6 +223,35 @@ def load_data(ticker):
 
         # Show model performance metrics
         show_model_performance(ticker)
+
+        # Add a slider for user to change model's weight to compose ensemble model
+        with st.expander("Change model's weight for ensemble model"):
+            weights = model_weights_df.loc[model_weights_df['TICKER'] == ticker, ['weight_prophet', 'weight_arima', 'weight_lstm', 'weight_gru']].squeeze()
+            
+            weight_prophet = st.slider('Weight for Prophet', min_value=0.0, max_value=1.0, value=weights['weight_prophet'], step=0.01)
+            weight_arima = st.slider('Weight for ARIMA', min_value=0.0, max_value=1.0, value=weights['weight_arima'], step=0.01)
+            weight_lstm = st.slider('Weight for LSTM', min_value=0.0, max_value=1.0, value=weights['weight_lstm'], step=0.01)
+            weight_gru = st.slider('Weight for GRU', min_value=0.0, max_value=1.0, value=weights['weight_gru'], step=0.01)
+            
+            total_weight = weight_prophet + weight_arima + weight_lstm + weight_gru
+            if total_weight != 1:
+                    st.error("The sum of the weights must equal 1. Please adjust the weights.")
+
+            ensemble_prediction = (data['Prophet'] * weight_prophet +
+                        data['Arima'] * weight_arima +
+                        data['Lstm'] * weight_lstm +
+                        data['Gru'] * weight_gru)
+
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=data['Date'], y=data['Close'], mode='lines', name='Actual Prices'))
+            fig.add_trace(go.Scatter(x=data['Date'], y=ensemble_prediction, mode='lines', name='Ensemble Prediction'))
+
+            fig.update_layout(title='Change weights for ensemble models',
+                  xaxis_title='Date',
+                  yaxis_title='Price',
+                  legend_title='Legend')
+
+            st.plotly_chart(fig)
         
     except FileNotFoundError:
         st.error('The file could not be found. Please check the ticker symbol.')
