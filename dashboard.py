@@ -94,12 +94,17 @@ def show_model_weights(ticker):
         weights = model_weights_df.loc[model_weights_df['TICKER'] == ticker, ['weight_prophet', 'weight_arima', 'weight_lstm', 'weight_gru']].squeeze()
         labels = ['Prophet', 'ARIMA', 'LSTM', 'GRU']
         values = [weights['weight_prophet'], weights['weight_arima'], weights['weight_lstm'], weights['weight_gru']]
+
+        colors = ['#1f77b4',  
+          '#2ca02c',  
+          '#ff7f0e',  
+          '#d62728'] 
         
         # Creating the pie chart
-        fig = go.Figure(data=[go.Pie(labels=labels, values=values, hole=.3, marker=dict(colors=['#00C9FF', '#FF6AD5', '#00F900', '#FFEA00']))])
+        fig = go.Figure(data=[go.Pie(labels=labels, values=values, hole=.3, marker=dict(colors=colors))])
 
         # Customizing the pie chart
-        fig.update_traces(textinfo='percent+label', pull=[0.1, 0, 0, 0], marker=dict(line=dict(color='#000000', width=2)))
+        fig.update_traces(textposition='outside', textinfo='percent+label', pull=[0.1, 0, 0, 0], marker=dict(line=dict(color='#000000', width=2)))
         fig.update_layout(title_text=f'Model Weights for {ticker}', title_x=0.5)
         
         # Displaying the pie chart in Streamlit
@@ -217,7 +222,7 @@ def load_data(ticker):
 
         # Calculate and display MAPE for the Ensemble model on the validation set
         calculate_and_display_mape(data, ticker)
-
+        
         # Show model weights
         show_model_weights(ticker)
 
@@ -246,9 +251,9 @@ def load_data(ticker):
 
             fig = go.Figure()
             fig.add_trace(go.Scatter(x=data['Date'], y=data['Close'], mode='lines', name='Actual Prices'))
-            fig.add_trace(go.Scatter(x=data['Date'], y=ensemble_prediction, mode='lines', name='Ensemble Prediction'))
+            fig.add_trace(go.Scatter(x=data['Date'], y=ensemble_prediction, mode='lines', name='Your Ensemble Model Prediction'))
 
-            fig.update_layout(title='Change weights for ensemble models',
+            fig.update_layout(title='Change weights for ensemble model',
                   xaxis_title='Date',
                   yaxis_title='Price',
                   legend_title='Legend')
