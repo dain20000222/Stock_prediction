@@ -21,7 +21,7 @@ sectors = {
     "🏥 Health Care" : ["LLY", "UNH", "JNJ", "MRK", "ABBV", "TMO", "ABT", "DHR", "PFE", "AMGN"],
     "🛍️ Consumer Cyclical": ["AMZN", "TSLA", "HD", "MCD", "NIKE", "LOW", "BKNG", "TJX", "SBUX", "ABNB"],
     "🏭 Industrials": ["GE", "CAT", "UNP", "HON", "UPS", "BA", "RTX", "ETN", "ADP", "LMT"],
-    "📱 Communication Services": ["GOOG", "META", "NFLX", "DIS", "TMUS", "VZ", "CMCSA", "T", "SPOT", "DASH"],
+    "📱 Communication Services": ["GOOG", "META", "NFLX", "DIS", "TMUS", "VZ", "CMCSA", "T"],
     "🏪 Consumer Defensive": ["WMT", "PG", "COST", "KO", "PEP", "PM", "MDLZ", "MO", "CL", "TGT"],
     "🔋 Energy": ["XOM", "CVX", "COP", "SLB", "EOG", "PSX", "MPC", "EPD", "PXD", "OXY"],
     "🔧 Basic materials": [ "LIN", "SHW", "SCCO", "ECL", "CRH", "FCX", "APD", "NUE", "DOW"],
