@@ -92,18 +92,18 @@ if st.sidebar.button('Submit Ticker'):
 def show_model_weights(ticker):
     if ticker in model_weights_df['TICKER'].values:
         weights = model_weights_df.loc[model_weights_df['TICKER'] == ticker, ['weight_prophet', 'weight_arima', 'weight_lstm', 'weight_gru']].squeeze()
-        st.markdown(f"##### Model weights for {ticker}:", unsafe_allow_html=True)
-        # Using st.metric to display each weight next to each other
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric("Prophet", f"{weights['weight_prophet']:.2%}")
-        with col2:
-            st.metric("ARIMA", f"{weights['weight_arima']:.2%}")
-        with col3:
-            st.metric("LSTM", f"{weights['weight_lstm']:.2%}")
-        with col4:
-            st.metric("GRU", f"{weights['weight_gru']:.2%}")
-        st.divider()
+        labels = ['Prophet', 'ARIMA', 'LSTM', 'GRU']
+        values = [weights['weight_prophet'], weights['weight_arima'], weights['weight_lstm'], weights['weight_gru']]
+        
+        # Creating the pie chart
+        fig = go.Figure(data=[go.Pie(labels=labels, values=values, hole=.3, marker=dict(colors=['#00C9FF', '#FF6AD5', '#00F900', '#FFEA00']))])
+
+        # Customizing the pie chart
+        fig.update_traces(textinfo='percent+label', pull=[0.1, 0, 0, 0], marker=dict(line=dict(color='#000000', width=2)))
+        fig.update_layout(title_text=f'Model Weights for {ticker}', title_x=0.5)
+        
+        # Displaying the pie chart in Streamlit
+        st.plotly_chart(fig, use_container_width=True)
     else:
         st.write(f"No model weight information available for {ticker}")
 
@@ -224,6 +224,8 @@ def load_data(ticker):
         # Show model performance metrics
         show_model_performance(ticker)
 
+        st.divider()
+
         # Add a slider for user to change model's weight to compose ensemble model
         with st.expander("Change model's weight for ensemble model"):
             weights = model_weights_df.loc[model_weights_df['TICKER'] == ticker, ['weight_prophet', 'weight_arima', 'weight_lstm', 'weight_gru']].squeeze()
@@ -235,7 +237,7 @@ def load_data(ticker):
             
             total_weight = weight_prophet + weight_arima + weight_lstm + weight_gru
             if total_weight != 1:
-                    st.error("The sum of the weights must equal 1. Please adjust the weights.")
+                st.error("The weights should sum to 1 to be a proper ensemble model")
 
             ensemble_prediction = (data['Prophet'] * weight_prophet +
                         data['Arima'] * weight_arima +
