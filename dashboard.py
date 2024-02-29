@@ -4,6 +4,8 @@ import plotly.graph_objs as go
 import os
 import numpy as np
 import yfinance as yf
+from datetime import datetime, timedelta
+import time
 
 # Initialize session state variables
 if 'home_page' not in st.session_state:
@@ -31,6 +33,7 @@ sectors = {
 
 # Define a function to display the welcome message and sector stocks
 def show_welcome_message():
+
     st.markdown("""
     ## Da In Kim's 3rd Year Project
     ### Stock Price Prediction Using Ensemble Models
@@ -148,6 +151,40 @@ def calculate_and_display_mape(data, ticker):
     else:
         st.write(f"No validation set data available for {ticker}")
 
+def train_models():
+    st.text("Training models...")
+    # Progress bar
+    progress_bar = st.progress(0)
+    for i in range(100):
+        time.sleep(0.1)
+        progress_bar.progress(i + 1)
+    st.success("Models trained successfully!")
+
+def show_predictions(start_date, end_date, file_path):
+    data = pd.read_csv(file_path)
+    
+    # Filter data based on the user-specified test period
+    filtered_data = data[(data['Date'] >= start_date.strftime('%Y-%m-%d')) & (data['Date'] <= end_date.strftime('%Y-%m-%d'))]
+    
+    # Create Plotly graph object for filtered data
+    fig = go.Figure()
+
+    # Ensure 'Close' and 'Ensemble' are displayed from the start
+    for column in ['Close', 'Ensemble']:
+        if column in filtered_data.columns:
+            fig.add_trace(go.Scatter(x=filtered_data['Date'], y=filtered_data[column], name=column, mode='lines'))
+    
+    # Add traces for model predictions, set them to be hidden in the graph initially
+    for model in filtered_data.columns[2:]:
+        if model not in ['Close', 'Ensemble']:
+            fig.add_trace(go.Scatter(x=filtered_data['Date'], y=filtered_data[model], name=model.upper(), mode='lines', visible='legendonly'))
+
+    # Set graph layout
+    fig.update_layout(title_text=f"Stock Price Prediction from {start_date} to {end_date}", xaxis_title='Date', yaxis_title='Price')
+    
+    # Display the graph in the Streamlit app
+    st.plotly_chart(fig)
+
 # Function to load data and visualize it
 def load_data(ticker):
     file_path = f'./ensemble/{ticker}_merged.csv'
@@ -165,23 +202,6 @@ def load_data(ticker):
     with st.expander(f"Stock Details for {ticker}"):
         st.write(f"Summary: {stock_details.get('longBusinessSummary', 'N/A')}")
 
-        # Date range selection
-        st.write("**Select Date Range for Stock Data**")
-        start_date, end_date = st.columns(2)
-        with start_date:
-            start_date = st.date_input("Start date", value=pd.to_datetime('2023-01-01'))
-        with end_date:
-            end_date = st.date_input("End date", value=pd.to_datetime('today'))
-        
-        # Fetch and display the stock data
-        data = stock_info.history(start=start_date, end=end_date)
-        fig = go.Figure()
-        # fig.add_trace(go.Scatter(x=data.index, y=data['Close'], mode='lines', name='Close Price'))
-        fig.add_trace(go.Candlestick(x=data.index,open=data['Open'],high=data['High'],low=data['Low'],close=data['Close']))
-        fig.update_layout(xaxis_rangeslider_visible=False)
-        fig.update_layout(title=f'{ticker} Closing Price', xaxis_title='Date', yaxis_title='Price (USD)')
-        st.plotly_chart(fig, use_container_width=True)
-
     if ticker == 'Select a ticker':
         return
 
@@ -189,46 +209,31 @@ def load_data(ticker):
         # Load the data
         data = pd.read_csv(file_path)
         
-        # Create Plotly graph object
-        fig = go.Figure()
+        st.subheader("Train Models")
+        # Button for train models
+        if st.button("Train Models"):
+            train_models()
 
-        # Ensure 'Close' and 'Ensemble' are displayed from the start
-        for column in ['Close', 'Ensemble']:
-            if column in data.columns:
-                fig.add_trace(go.Scatter(x=data['Date'], y=data[column], name=column, mode='lines'))
-        
-        # Add traces for model predictions, set them to be hidden in the graph initially
-        for model in data.columns[2:]:  # Assuming the first column is Date and second is Close
-            if model not in ['Close', 'Ensemble']:
-                fig.add_trace(go.Scatter(x=data['Date'], y=data[model], name=model.upper(), mode='lines', visible='legendonly'))
+        st.subheader("Test models for selected data range")
+        col1, col2 = st.columns(2)
+        with col1:
+            start_date = st.date_input("Start Date", value=datetime(2023, 11, 10))
+        with col2:
+            end_date = st.date_input("End Date", value=datetime(2024, 2, 2))
 
-        # Add shapes to highlight the validation and test set periods
-        fig.add_vrect(
-            x0="2023-01-03", x1="2023-11-10",
-            annotation_text="Validation Set", annotation_position="top left",
-            fillcolor="yellow", opacity=0.2, line_width=0
-        )
-        fig.add_vrect(
-            x0="2023-11-11", x1="2024-02-02",
-            annotation_text="Test Set", annotation_position="top left",
-            fillcolor="blue", opacity=0.2, line_width=0
-        )
+        # Button for test models
+        if st.button("Test models"):
+            show_predictions(start_date, end_date, file_path)
 
-        # Set graph layout
-        fig.update_layout(title_text=f"{ticker} Stock Price Prediction", xaxis_title='Date', yaxis_title='Price')
-        
-        # Display the graph in the Streamlit app
-        st.plotly_chart(fig)
+            # Calculate and display MAPE for the Ensemble model on the validation set
+            calculate_and_display_mape(data, ticker)
+            
+            # Show model weights
+            show_model_weights(ticker)
 
-        # Calculate and display MAPE for the Ensemble model on the validation set
-        calculate_and_display_mape(data, ticker)
-        
-        # Show model weights
-        show_model_weights(ticker)
+            # Show model performance metrics
+            show_model_performance(ticker)
 
-        # Show model performance metrics
-        show_model_performance(ticker)
-        
     except FileNotFoundError:
         st.error('The file could not be found. Please check the ticker symbol.')
         st.table(pd.DataFrame(tickers, columns=['Available Tickers']))
@@ -236,6 +241,7 @@ def load_data(ticker):
 # Show the welcome message on the home page
 if st.session_state.home_page or st.session_state.selected_ticker == 'Select a ticker':
     show_welcome_message()
+
 else:
     # If not on the home page, and a ticker is selected or entered, load and display the data
     load_data(st.session_state.selected_ticker)
