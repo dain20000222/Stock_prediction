@@ -228,37 +228,6 @@ def load_data(ticker):
 
         # Show model performance metrics
         show_model_performance(ticker)
-
-        st.divider()
-
-        # Add a slider for user to change model's weight to compose ensemble model
-        with st.expander("Change model's weight for ensemble model"):
-            weights = model_weights_df.loc[model_weights_df['TICKER'] == ticker, ['weight_prophet', 'weight_arima', 'weight_lstm', 'weight_gru']].squeeze()
-            
-            weight_prophet = st.slider('Weight for Prophet', min_value=0.0, max_value=1.0, value=weights['weight_prophet'], step=0.01)
-            weight_arima = st.slider('Weight for ARIMA', min_value=0.0, max_value=1.0, value=weights['weight_arima'], step=0.01)
-            weight_lstm = st.slider('Weight for LSTM', min_value=0.0, max_value=1.0, value=weights['weight_lstm'], step=0.01)
-            weight_gru = st.slider('Weight for GRU', min_value=0.0, max_value=1.0, value=weights['weight_gru'], step=0.01)
-            
-            total_weight = weight_prophet + weight_arima + weight_lstm + weight_gru
-            if total_weight != 1:
-                st.error("The weights should sum to 1 to be a proper ensemble model")
-
-            ensemble_prediction = (data['Prophet'] * weight_prophet +
-                        data['Arima'] * weight_arima +
-                        data['Lstm'] * weight_lstm +
-                        data['Gru'] * weight_gru)
-
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(x=data['Date'], y=data['Close'], mode='lines', name='Actual Prices'))
-            fig.add_trace(go.Scatter(x=data['Date'], y=ensemble_prediction, mode='lines', name='Your Ensemble Model Prediction'))
-
-            fig.update_layout(title='Change weights for ensemble model',
-                  xaxis_title='Date',
-                  yaxis_title='Price',
-                  legend_title='Legend')
-
-            st.plotly_chart(fig)
         
     except FileNotFoundError:
         st.error('The file could not be found. Please check the ticker symbol.')
