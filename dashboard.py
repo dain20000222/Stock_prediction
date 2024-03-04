@@ -6,6 +6,11 @@ import numpy as np
 import yfinance as yf
 from datetime import datetime, timedelta
 import time
+from prophet import Prophet
+from statsmodels.tsa.arima.model import ARIMA
+import joblib
+from keras.models import load_model
+from pmdarima.arima import auto_arima
 
 # Initialize session state variables
 if 'home_page' not in st.session_state:
@@ -151,38 +156,247 @@ def calculate_and_display_mape(data, ticker):
     else:
         st.write(f"No validation set data available for {ticker}")
 
-def train_models():
+def train_models(ticker, start_date, end_date):
     st.text("Training models...")
+
+    prophet(ticker, start_date, end_date)
+    arima(ticker, start_date, end_date)
+    lstm(ticker, start_date, end_date)
+    gru(ticker, start_date, end_date)
+
+    st.text("Testing models...")
     # Progress bar
     progress_bar = st.progress(0)
     for i in range(100):
-        time.sleep(0.1)
+        time.sleep(0.01)
         progress_bar.progress(i + 1)
     st.success("Models trained successfully!")
 
-def show_predictions(start_date, end_date, file_path):
-    data = pd.read_csv(file_path)
+def prophet(ticker, start_date, end_date):
+    file_path = f'./data/stock_price_data/{ticker}.csv'
+    df = pd.read_csv(file_path, index_col='Date', parse_dates=True)
+    df_prophet = df['Close'].reset_index()
+    df_prophet.columns = ['ds', 'y']
+    df_prophet['ds'] = pd.to_datetime(df_prophet['ds'])
     
-    # Filter data based on the user-specified test period
-    filtered_data = data[(data['Date'] >= start_date.strftime('%Y-%m-%d')) & (data['Date'] <= end_date.strftime('%Y-%m-%d'))]
+    model = Prophet()
+    model.fit(df_prophet)
     
-    # Create Plotly graph object for filtered data
+    last_date = df_prophet['ds'].max()
+    future_days = (pd.to_datetime(end_date) - last_date).days
+    future = model.make_future_dataframe(periods=future_days)
+    
+    forecast = model.predict(future)
+    
+    # Select only 'ds' and 'yhat' for consistency with ARIMA model predictions
+    forecast_df = forecast[['ds', 'yhat']]
+    
+    # Filter predictions to start from start_date
+    forecast_df = forecast_df[forecast_df['ds'] >= pd.to_datetime(start_date)]
+    
+    # Store the forecast in the session state
+    if 'forecast_data' not in st.session_state:
+        st.session_state.forecast_data = {}
+    st.session_state.forecast_data[f'{ticker}_prophet'] = forecast_df
+    
+    st.write(f"Prophet model training and forecasting for {ticker} completed.")
+
+def arima(ticker, start_date, end_date):
+    file_path = f'./data/stock_price_data/{ticker}.csv'
+    df = pd.read_csv(file_path, index_col='Date', parse_dates=True)
+    df_arima = df['Close'].reset_index()
+    df_arima.columns = ['ds', 'y']
+    
+    model_auto_arima = auto_arima(df_arima['y'], start_p=1, start_q=1,
+                                  test='adf',       
+                                  max_p=3, max_q=3, 
+                                  m=1,              
+                                  d=None,           
+                                  seasonal=False,   
+                                  start_P=0, 
+                                  D=0, 
+                                  trace=True,       
+                                  error_action='ignore',  
+                                  suppress_warnings=True, 
+                                  stepwise=True)    
+
+    last_date = df_arima['ds'].max()
+    future_days = (pd.to_datetime(end_date) - last_date).days
+    forecast, conf_int = model_auto_arima.predict(n_periods=future_days, return_conf_int=True)
+    
+    last_date = df_arima['ds'].iloc[-1]
+    future_dates = pd.date_range(start=last_date + pd.Timedelta(days=1), periods=future_days, freq='D')
+    forecast_df = pd.DataFrame({'ds': future_dates, 'yhat': forecast})
+    
+    if 'forecast_data' not in st.session_state:
+        st.session_state.forecast_data = {}
+    st.session_state.forecast_data[f'{ticker}_arima'] = forecast_df
+    
+    st.write(f"ARIMA model training and forecasting for {ticker} completed.")
+
+def lstm(ticker, start_date, end_date):
+    file_path = f'./data/normalized_stock_data/{ticker}.csv'
+    model_path = f'./models/{ticker}_lstm_model.h5'
+    scaler_path = './scalers/Close_scaler.pkl'
+    
+    df = pd.read_csv(file_path, thousands=',')
+    scaler_close = joblib.load(scaler_path)
+    
+    feature_cols = ['Close', 'Volume', 'Close_snp500', 'Close_dji', 'Close_nasdaq']
+    feature_df = pd.DataFrame(df, columns=feature_cols)
+    
+    feature_np = feature_df.to_numpy()
+    
+    model = load_model(model_path)
+    
+    window_size = 40
+    future_days = (pd.to_datetime(end_date) - pd.to_datetime(start_date)).days + 1
+    current_batch = feature_np[-window_size:].reshape(1, window_size, len(feature_cols))
+    
+    predictions = []
+    for _ in range(future_days):
+        current_pred = model.predict(current_batch)[0]
+        new_features = np.copy(current_batch[:, -1, :])
+        new_features[0, 0] = current_pred
+        new_features_shaped = np.reshape(new_features, (1, 1, len(feature_cols)))
+        current_batch = np.append(current_batch[:, 1:, :], new_features_shaped, axis=1)
+        predictions.append(current_pred)
+    
+    predictions_denormalized = scaler_close.inverse_transform(np.array(predictions).reshape(-1, 1)).flatten()
+    
+    last_date = pd.to_datetime(df['Date'].iloc[-1])
+    future_dates = pd.date_range(start=start_date, periods=future_days, freq='D')
+    
+    forecast_df = pd.DataFrame({'ds': future_dates, 'yhat': predictions_denormalized})
+    
+    if 'forecast_data' not in st.session_state:
+        st.session_state.forecast_data = {}
+    st.session_state.forecast_data[f'{ticker}_lstm'] = forecast_df
+    
+    st.write(f"LSTM model training and forecasting for {ticker} completed.")
+
+def gru(ticker, start_date, end_date):
+    file_path = f'./data/normalized_stock_data/{ticker}.csv'
+    model_path = f'./models/{ticker}_gru_model.h5'
+    scaler_path = './scalers/Close_scaler.pkl'
+    
+    df = pd.read_csv(file_path, thousands=',')
+    scaler_close = joblib.load(scaler_path)
+    
+    feature_cols = ['Close', 'Volume', 'Close_snp500', 'Close_dji', 'Close_nasdaq']
+    feature_df = pd.DataFrame(df, columns=feature_cols)
+    
+    feature_np = feature_df.to_numpy()
+    
+    model = load_model(model_path)
+    
+    window_size = 30
+    future_days = (pd.to_datetime(end_date) - pd.to_datetime(start_date)).days + 1
+    current_batch = feature_np[-window_size:].reshape(1, window_size, len(feature_cols))
+    
+    predictions = []
+    for _ in range(future_days):
+        current_pred = model.predict(current_batch)[0]
+        new_features = np.copy(current_batch[:, -1, :])
+        new_features[0, 0] = current_pred
+        new_features_shaped = np.reshape(new_features, (1, 1, len(feature_cols)))
+        current_batch = np.append(current_batch[:, 1:, :], new_features_shaped, axis=1)
+        predictions.append(current_pred)
+    
+    predictions_denormalized = scaler_close.inverse_transform(np.array(predictions).reshape(-1, 1)).flatten()
+    
+    last_date = pd.to_datetime(df['Date'].iloc[-1])
+    future_dates = pd.date_range(start=start_date, periods=future_days, freq='D')
+    
+    forecast_df = pd.DataFrame({'ds': future_dates, 'yhat': predictions_denormalized})
+    
+    if 'forecast_data' not in st.session_state:
+        st.session_state.forecast_data = {}
+    st.session_state.forecast_data[f'{ticker}_gru'] = forecast_df
+    
+    st.write(f"GRU model training and forecasting for {ticker} completed.")
+
+
+def show_predictions(ticker, start_date, end_date, file_path):
+    # Load the actual stock data
+    actual_data = pd.read_csv(file_path)
+    # Convert 'Date' column to datetime type
+    actual_data['Date'] = pd.to_datetime(actual_data['Date'])
+
+    # Load model weights for ensemble model
+    model_weights_df = pd.read_csv('./model_weight.csv')
+    weights = model_weights_df.loc[model_weights_df['TICKER'] == ticker, ['weight_prophet', 'weight_arima', 'weight_lstm', 'weight_gru']].squeeze()
+
+    # Prepare the figure
     fig = go.Figure()
 
-    # Ensure 'Close' and 'Ensemble' are displayed from the start
-    for column in ['Close', 'Ensemble']:
-        if column in filtered_data.columns:
-            fig.add_trace(go.Scatter(x=filtered_data['Date'], y=filtered_data[column], name=column, mode='lines'))
-    
-    # Add traces for model predictions, set them to be hidden in the graph initially
-    for model in filtered_data.columns[2:]:
-        if model not in ['Close', 'Ensemble']:
-            fig.add_trace(go.Scatter(x=filtered_data['Date'], y=filtered_data[model], name=model.upper(), mode='lines', visible='legendonly'))
-
-    # Set graph layout
+    # Update the layout of the figure
     fig.update_layout(title_text=f"Stock Price Prediction from {start_date} to {end_date}", xaxis_title='Date', yaxis_title='Price')
+
+    start_date = pd.to_datetime(start_date)
+    end_date = pd.to_datetime(end_date)
     
-    # Display the graph in the Streamlit app
+    # Filter the actual data for the selected date range
+    actual_filtered = actual_data[(actual_data['Date'] >= start_date) & (actual_data['Date'] <= end_date)]
+    
+    # Plot the actual 'Close' prices for the filtered range
+    fig.add_trace(go.Scatter(x=actual_filtered['Date'], y=actual_filtered['Close'], name='Actual', mode='lines'))
+
+    model_colors = {
+    'prophet': '#1f77b4',
+    'arima': '#2ca02c',
+    'lstm': '#ff7f0e',
+    'gru': '#d62728',
+    'ensemble': '#9467bd'
+    }
+
+    # Initialize an empty DataFrame for the ensemble predictions
+    ensemble_predictions = pd.DataFrame()
+
+    # Calculate weighted predictions for each model and sum them
+    for model_key in ['prophet', 'arima', 'lstm', 'gru']:
+        full_model_key = f'{ticker}_{model_key}'
+        if full_model_key in st.session_state.forecast_data:
+            forecast_data = st.session_state.forecast_data[full_model_key]
+            forecast_filtered = forecast_data[(forecast_data['ds'] >= start_date) & (forecast_data['ds'] <= end_date)].copy()
+            forecast_filtered['weighted_yhat'] = forecast_filtered['yhat'] * weights[f'weight_{model_key}']
+            
+            if ensemble_predictions.empty:
+                ensemble_predictions = forecast_filtered[['ds', 'weighted_yhat']].rename(columns={'weighted_yhat': model_key})
+            else:
+                ensemble_predictions = ensemble_predictions.merge(forecast_filtered[['ds', 'weighted_yhat']], on='ds', how='outer', suffixes=(False, False)).rename(columns={'weighted_yhat': model_key})
+
+    # Sum the weighted predictions to get the ensemble prediction
+    ensemble_predictions['ensemble'] = ensemble_predictions[['prophet', 'arima', 'lstm', 'gru']].sum(axis=1)
+
+    # Post processing to match the starting point of ensemble model prediction and real price
+    # Find the first actual closing price in the selected date range
+    first_actual_close = actual_filtered['Close'].iloc[0]
+    
+    if not ensemble_predictions.empty:
+        # Find the first ensemble prediction
+        first_ensemble_pred = ensemble_predictions['ensemble'].iloc[0]
+
+        # Calculate the offset needed to match the first actual closing price
+        offset = first_actual_close - first_ensemble_pred
+
+        # Adjust all ensemble predictions by the calculated offset
+        ensemble_predictions['ensemble'] += offset
+
+        # Add the adjusted ensemble prediction as a separate trace
+        fig.add_trace(go.Scatter(x=ensemble_predictions['ds'], y=ensemble_predictions['ensemble'], name='Ensemble', mode='lines', line=dict(color=model_colors['ensemble'])))
+
+    for model_name in [f'{ticker}_prophet', f'{ticker}_arima', f'{ticker}_lstm', f'{ticker}_gru']:
+        if model_name in st.session_state.get('forecast_data', {}):
+            forecast_data = st.session_state.forecast_data[model_name]
+            # Filter the forecast data for the selected date range
+            forecast_filtered = forecast_data[(forecast_data['ds'] >= start_date) & (forecast_data['ds'] <= end_date)]
+            # Extract model name for display
+            display_name = model_name.split('_')[-1].upper()
+            # Plot the forecast data
+            fig.add_trace(go.Scatter(x=forecast_filtered['ds'], y=forecast_filtered['yhat'], name=display_name, mode='lines', line=dict(color=model_colors[model_name.split('_')[-1]]), visible="legendonly"))
+    
+    # Display the figure
     st.plotly_chart(fig)
 
 # Function to load data and visualize it
@@ -202,6 +416,23 @@ def load_data(ticker):
     with st.expander(f"Stock Details for {ticker}"):
         st.write(f"Summary: {stock_details.get('longBusinessSummary', 'N/A')}")
 
+        # Date range selection
+        st.write("**Select Date Range for Stock Data**")
+        start_date, end_date = st.columns(2)
+        with start_date:
+            start_date = st.date_input("Start date", value=pd.to_datetime('2023-01-01'))
+        with end_date:
+            end_date = st.date_input("End date", value=pd.to_datetime('today'))
+
+        # Fetch and display the stock data
+        data = stock_info.history(start=start_date, end=end_date)
+        fig = go.Figure()
+        # fig.add_trace(go.Scatter(x=data.index, y=data['Close'], mode='lines', name='Close Price'))
+        fig.add_trace(go.Candlestick(x=data.index,open=data['Open'],high=data['High'],low=data['Low'],close=data['Close']))
+        fig.update_layout(xaxis_rangeslider_visible=False)
+        fig.update_layout(title=f'{ticker} Closing Price', xaxis_title='Date', yaxis_title='Price (USD)')
+        st.plotly_chart(fig, use_container_width=True)
+
     if ticker == 'Select a ticker':
         return
 
@@ -209,21 +440,20 @@ def load_data(ticker):
         # Load the data
         data = pd.read_csv(file_path)
         
-        st.subheader("Train Models")
-        # Button for train models
-        if st.button("Train Models"):
-            train_models()
+        st.subheader("Train and Test Models")
+        st.write("Select data range for testing")
 
-        st.subheader("Test models for selected data range")
         col1, col2 = st.columns(2)
         with col1:
-            start_date = st.date_input("Start Date", value=datetime(2023, 11, 10))
+            start_date = st.date_input("Start Date", value=datetime(2023, 11, 13))
         with col2:
             end_date = st.date_input("End Date", value=datetime(2024, 2, 2))
 
-        # Button for test models
-        if st.button("Test models"):
-            show_predictions(start_date, end_date, file_path)
+        # Button for train models
+        if st.button("Train and Test Models"):
+            train_models(ticker, start_date, end_date)
+
+            show_predictions(ticker, start_date, end_date, file_path)
 
             # Calculate and display MAPE for the Ensemble model on the validation set
             calculate_and_display_mape(data, ticker)
