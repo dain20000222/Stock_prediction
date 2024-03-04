@@ -9,7 +9,8 @@ import time
 from prophet import Prophet
 from statsmodels.tsa.arima.model import ARIMA
 import joblib
-from keras.models import load_model
+# from keras.models import load_model
+from tensorflow.keras.models import load_model
 from pmdarima.arima import auto_arima
 
 # Initialize session state variables
