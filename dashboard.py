@@ -150,21 +150,20 @@ def calculate_and_display_mape(data, ticker):
     else:
         st.write(f"No validation set data available for {ticker}")
 
-def train_models(ticker, start_date, end_date):
-    st.text("Training models...")
+def test_models(ticker, start_date, end_date):
+    st.text("Testing models...")
 
     prophet(ticker, start_date, end_date)
     arima(ticker, start_date, end_date)
     lstm(ticker, start_date, end_date)
     gru(ticker, start_date, end_date)
 
-    st.text("Testing models...")
     # Progress bar
     progress_bar = st.progress(0)
     for i in range(100):
         time.sleep(0.01)
         progress_bar.progress(i + 1)
-    st.success("Models trained successfully!")
+    st.success("Models testing successfully!")
 
 def prophet(ticker, start_date, end_date):
     file_path = f'./data/stock_price_data/{ticker}.csv'
@@ -476,8 +475,8 @@ def load_data(ticker):
             end_date = st.date_input("End Date", value=datetime(2024, 2, 2))
 
         # Button for train models
-        if st.button("Train and Test Models"):
-            train_models(ticker, start_date, end_date)
+        if st.button("Load and Test Models"):
+            test_models(ticker, start_date, end_date)
 
             show_predictions(ticker, start_date, end_date, file_path)
 
