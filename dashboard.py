@@ -475,7 +475,7 @@ def load_data(ticker):
             end_date = st.date_input("End Date", value=datetime(2024, 2, 2))
 
         # Button for train models
-        if st.button("Load and Test Models"):
+        if st.button("Test Models"):
             test_models(ticker, start_date, end_date)
 
             show_predictions(ticker, start_date, end_date, file_path)
