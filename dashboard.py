@@ -10,6 +10,9 @@ import joblib
 # from keras.models import load_model
 from tensorflow.keras.models import load_model
 from pmdarima.arima import auto_arima
+from io import BytesIO
+import requests
+from PIL import Image
 
 # Initialize session state variables
 if 'home_page' not in st.session_state:
@@ -19,7 +22,7 @@ if 'selected_ticker' not in st.session_state or st.session_state.selected_ticker
 
 # Set the title of the Streamlit app
 st.title('📈 Stock Price Prediction Dashboard')
-st.markdown("---")
+st.divider()
 
 sectors = {
     "💻 Technologies": ["MSFT", "AAPL", "NVDA", "AVGO", "ORCL", "CRM", "AMD", "ADBE", "ACN", "CSCO"],
@@ -91,6 +94,12 @@ if st.sidebar.button('Submit Ticker'):
     else:
         st.session_state.home_page = True
 
+with st.sidebar:
+    st.markdown("""
+    <br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br>
+    """, unsafe_allow_html=True)
+    st.image('uomlogo.png', use_column_width=True)
+
 # Function to show model weights
 def show_model_weights(ticker):
     if ticker in model_weights_df['TICKER'].values:
@@ -139,14 +148,15 @@ def show_model_performance(ticker):
         except FileNotFoundError:
             st.error(f"The file for {model_name} could not be found. Please check the file path and name.")
 
-# Function to calculate and display MAPE for the Ensemble model on the validation set
+# Function to calculate and display MAPE for the Ensemble model
 def calculate_and_display_mape(data, ticker):
-    # Isolate the validation set and calculate MAPE
+    data['Date'] = pd.to_datetime(data['Date'])
+
+    # Calculate MAPE for validation set
     validation_set = data[(data['Date'] >= "2023-01-03") & (data['Date'] <= "2023-11-10")]
     if not validation_set.empty and 'Ensemble' in validation_set.columns and 'Close' in validation_set.columns:
-        mape = np.mean(np.abs((validation_set['Close'] - validation_set['Ensemble']) / validation_set['Close'])) * 100
-        st.write(f"##### Ensemble Model MAPE for {ticker}: {mape:.2f}%", unsafe_allow_html=True)
-        st.divider()
+        validation_mape = np.mean(np.abs((validation_set['Close'] - validation_set['Ensemble']) / validation_set['Close'])) * 100
+        st.write(f"Ensemble Model MAPE for {ticker} on Validation Set: {validation_mape:.2f}%", unsafe_allow_html=True)
     else:
         st.write(f"No validation set data available for {ticker}")
 
@@ -254,6 +264,12 @@ def lstm(ticker, start_date, end_date):
     features = ['Close', 'Volume', 'Close_snp500', 'Close_dji', 'Close_nasdaq']
     feature_df = df_ticker[features]
 
+    # Preprocess: Replace 0 with NaN and drop rows with NaN
+    for column in features:
+        feature_df[column] = feature_df[column].replace(0, np.nan)
+
+    feature_df = feature_df.dropna()
+
     # Scale features
     scaled_features = pd.DataFrame(index=feature_df.index)
     for col in features:
@@ -343,10 +359,14 @@ def gru(ticker, start_date, end_date):
     st.write(f"GRU model training and forecasting for {ticker} completed.")
 
 def show_predictions(ticker, start_date, end_date, file_path):
-    # Load the actual stock data
-    actual_data = pd.read_csv(file_path)
-    # Convert 'Date' column to datetime type
-    actual_data['Date'] = pd.to_datetime(actual_data['Date'])
+    df_ticker = yf.download(ticker, end=end_date)
+
+    if not pd.api.types.is_datetime64_any_dtype(df_ticker.index):
+        df_ticker.index = pd.to_datetime(df_ticker.index)
+    df_ticker.reset_index(inplace=True)
+
+    df_ticker.rename(columns={'index': 'Date'}, inplace=True)
+    df_ticker['Date'] = pd.to_datetime(df_ticker['Date'])
 
     # Load model weights for ensemble model
     model_weights_df = pd.read_csv('./model_weight.csv')
@@ -360,12 +380,12 @@ def show_predictions(ticker, start_date, end_date, file_path):
 
     start_date = pd.to_datetime(start_date)
     end_date = pd.to_datetime(end_date)
-    
+
     # Filter the actual data for the selected date range
-    actual_filtered = actual_data[(actual_data['Date'] >= start_date) & (actual_data['Date'] <= end_date)]
+    df_ticker = df_ticker[(df_ticker['Date'] >= start_date) & (df_ticker['Date'] <= end_date)]
     
     # Plot the actual 'Close' prices for the filtered range
-    fig.add_trace(go.Scatter(x=actual_filtered['Date'], y=actual_filtered['Close'], name='Actual', mode='lines'))
+    fig.add_trace(go.Scatter(x=df_ticker['Date'], y=df_ticker['Close'], name='Close', mode='lines'))
 
     model_colors = {
     'prophet': '#1f77b4',
@@ -395,7 +415,7 @@ def show_predictions(ticker, start_date, end_date, file_path):
     ensemble_predictions['ensemble'] = ensemble_predictions[['prophet', 'arima', 'lstm', 'gru']].sum(axis=1)
 
     # Adjusting the starting point of ensemble predictions to match the actual prices
-    first_actual_close = actual_filtered['Close'].iloc[0]  # First actual closing price in the selected date range
+    first_actual_close = df_ticker['Close'].iloc[0]  # First actual closing price in the selected date range
     
     if not ensemble_predictions.empty:
         first_ensemble_pred = ensemble_predictions['ensemble'].iloc[0]  # First ensemble prediction
@@ -424,9 +444,30 @@ def show_predictions(ticker, start_date, end_date, file_path):
     # Display the figure
     st.plotly_chart(fig)
 
+    # Calculate MAPE between ensemble predictions and actual Close prices
+    if not ensemble_predictions.empty and not df_ticker.empty:
+        df_ticker_for_mape = df_ticker[['Date', 'Close']].rename(columns={'Date': 'ds', 'Close': 'actual'})
+        ensemble_for_mape = ensemble_predictions[['ds', 'ensemble']].rename(columns={'ensemble': 'predicted'})
+        merged_for_mape = pd.merge(df_ticker_for_mape, ensemble_for_mape, on='ds', how='inner')
+        
+        # Calculate MAPE
+        mape = np.mean(np.abs((merged_for_mape['actual'] - merged_for_mape['predicted']) / merged_for_mape['actual'])) * 100
+        
+        st.write(f'Ensemble Model MAPE for {ticker} on Test Set: {mape:.2f}%', unsafe_allow_html=True)
+
 # Function to load data and visualize it
 def load_data(ticker):
     file_path = f'./ensemble/{ticker}_merged.csv'
+
+    # Fetch company logo
+    logo_url = f"https://eodhd.com/img/logos/US/{ticker}.png"
+    try:
+        logo_response = requests.get(logo_url)
+        if logo_response.status_code == 200:
+            logo_image = Image.open(BytesIO(logo_response.content))
+            st.image(logo_image, width=100)
+    except Exception:
+        pass
 
     stock_info = yf.Ticker(str(ticker))
     stock_details = stock_info.info
@@ -434,11 +475,11 @@ def load_data(ticker):
     string_name = stock_details['longName']
     st.header('**%s**' % string_name)
 
-    sector_name = stock_details['sector']
-    st.subheader('Sector: %s' % sector_name)
-    
     # Exander for details of stock from yahoo finance
     with st.expander(f"Stock Details for {ticker}"):
+        sector_name = stock_details['sector']
+        st.write('Sector: %s' % sector_name) 
+
         st.write(f"Summary: {stock_details.get('longBusinessSummary', 'N/A')}")
 
         # Date range selection
@@ -470,9 +511,9 @@ def load_data(ticker):
 
         col1, col2 = st.columns(2)
         with col1:
-            start_date = st.date_input("Start Date", value=datetime(2023, 11, 13))
+            start_date = st.date_input("Start Date", value=pd.to_datetime('2023-11-13'))
         with col2:
-            end_date = st.date_input("End Date", value=datetime(2024, 2, 2))
+            end_date = st.date_input("End Date", value=pd.to_datetime('today'))
 
         # Button for train models
         if st.button("Test Models"):
