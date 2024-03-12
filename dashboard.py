@@ -148,18 +148,6 @@ def show_model_performance(ticker):
         except FileNotFoundError:
             st.error(f"The file for {model_name} could not be found. Please check the file path and name.")
 
-# Function to calculate and display MAPE for the Ensemble model
-def calculate_and_display_mape(data, ticker):
-    data['Date'] = pd.to_datetime(data['Date'])
-
-    # Calculate MAPE for validation set
-    validation_set = data[(data['Date'] >= "2023-01-03") & (data['Date'] <= "2023-11-10")]
-    if not validation_set.empty and 'Ensemble' in validation_set.columns and 'Close' in validation_set.columns:
-        validation_mape = np.mean(np.abs((validation_set['Close'] - validation_set['Ensemble']) / validation_set['Close'])) * 100
-        st.write(f"Ensemble Model MAPE for {ticker} on Validation Set: {validation_mape:.2f}%", unsafe_allow_html=True)
-    else:
-        st.write(f"No validation set data available for {ticker}")
-
 def test_models(ticker, start_date, end_date):
     st.text("Testing models...")
 
@@ -358,7 +346,7 @@ def gru(ticker, start_date, end_date):
     
     st.write(f"GRU model training and forecasting for {ticker} completed.")
 
-def show_predictions(ticker, start_date, end_date, file_path):
+def show_predictions(ticker, start_date, end_date):
     df_ticker = yf.download(ticker, end=end_date)
 
     if not pd.api.types.is_datetime64_any_dtype(df_ticker.index):
@@ -454,11 +442,16 @@ def show_predictions(ticker, start_date, end_date, file_path):
         mape = np.mean(np.abs((merged_for_mape['actual'] - merged_for_mape['predicted']) / merged_for_mape['actual'])) * 100
         
         st.write(f'Ensemble Model MAPE for {ticker} on Test Set: {mape:.2f}%', unsafe_allow_html=True)
+    
+    # Display validation MAPE for ensemble model
+    validation_mape = pd.read_csv('./validation_mape.csv')
+
+    ticker_mape = validation_mape[validation_mape['TICKER'] == ticker]['MAPE'].values[0]
+
+    st.write(f'Ensemble Model MAPE for {ticker} on Validation Set: {ticker_mape:.2f}%', unsafe_allow_html=True)
 
 # Function to load data and visualize it
 def load_data(ticker):
-    file_path = f'./ensemble/{ticker}_merged.csv'
-
     # Fetch company logo
     logo_url = f"https://eodhd.com/img/logos/US/{ticker}.png"
     try:
@@ -503,9 +496,6 @@ def load_data(ticker):
         return
 
     try:
-        # Load the data
-        data = pd.read_csv(file_path)
-        
         st.subheader("Train and Test Models")
         st.write("Select data range for testing")
 
@@ -519,10 +509,8 @@ def load_data(ticker):
         if st.button("Test Models"):
             test_models(ticker, start_date, end_date)
 
-            show_predictions(ticker, start_date, end_date, file_path)
-
-            # Calculate and display MAPE for the Ensemble model on the validation set
-            calculate_and_display_mape(data, ticker)
+            # Shoe model prediction
+            show_predictions(ticker, start_date, end_date)
             
             # Show model weights
             show_model_weights(ticker)
