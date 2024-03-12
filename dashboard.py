@@ -21,9 +21,10 @@ if 'selected_ticker' not in st.session_state or st.session_state.selected_ticker
     st.session_state.selected_ticker = 'Select a ticker'
 
 # Set the title of the Streamlit app
-st.title('📈 Stock Price Prediction Dashboard')
+st.title('📈 Stock Prediction Dashboard')
 st.divider()
 
+# Company ticker lists for each sectors
 sectors = {
     "💻 Technologies": ["MSFT", "AAPL", "NVDA", "AVGO", "ORCL", "CRM", "AMD", "ADBE", "ACN", "CSCO"],
     "💰 Financial Services": ["BRK-B", "JPM", "V", "MA", "BAC", "WFC", "BX", "MS", "GS"],
@@ -38,12 +39,12 @@ sectors = {
     "⚙️ Utilities": ["NEE", "SO", "DUK", "SRE", "AEP", "PCG", "CEG", "D", "EXC", "XEL"]
 }
 
-# Define a function to display the welcome message and sector stocks
+# Function to display the welcome message and sector stocks
 def show_welcome_message():
 
     st.markdown("""
-    ## Da In Kim's 3rd Year Project
-    ### Stock Price Prediction Using Ensemble Models
+    ### Da In Kim's 3rd Year Project
+    #### Stock Price Prediction Using Ensemble Models
     """, unsafe_allow_html=True)
 
     st.markdown("""
@@ -94,6 +95,7 @@ if st.sidebar.button('Submit Ticker'):
     else:
         st.session_state.home_page = True
 
+# Add UoM logo in the sidebar
 with st.sidebar:
     st.markdown("""
     <br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br>
@@ -103,6 +105,7 @@ with st.sidebar:
 # Function to show model weights
 def show_model_weights(ticker):
     if ticker in model_weights_df['TICKER'].values:
+        # Read dataframe to get model weights for selected ticker
         weights = model_weights_df.loc[model_weights_df['TICKER'] == ticker, ['weight_prophet', 'weight_arima', 'weight_lstm', 'weight_gru']].squeeze()
         labels = ['Prophet', 'ARIMA', 'LSTM', 'GRU']
         values = [weights['weight_prophet'], weights['weight_arima'], weights['weight_lstm'], weights['weight_gru']]
@@ -114,12 +117,10 @@ def show_model_weights(ticker):
         
         # Creating the pie chart
         fig = go.Figure(data=[go.Pie(labels=labels, values=values, hole=.3, marker=dict(colors=colors))])
-
-        # Customizing the pie chart
         fig.update_traces(textposition='outside', textinfo='percent+label', pull=[0.1, 0, 0, 0], marker=dict(line=dict(color='#000000', width=2)))
         fig.update_layout(title_text=f'Model Weights for {ticker}', title_x=0.5)
         
-        # Displaying the pie chart in Streamlit
+        # Displaying the pie chart
         st.plotly_chart(fig, use_container_width=True)
     else:
         st.write(f"No model weight information available for {ticker}")
@@ -148,9 +149,11 @@ def show_model_performance(ticker):
         except FileNotFoundError:
             st.error(f"The file for {model_name} could not be found. Please check the file path and name.")
 
+# Function to forecast models
 def test_models(ticker, start_date, end_date):
     st.text("Testing models...")
 
+    # Function to load models and forecast for period that user set
     prophet(ticker, start_date, end_date)
     arima(ticker, start_date, end_date)
     lstm(ticker, start_date, end_date)
@@ -163,20 +166,29 @@ def test_models(ticker, start_date, end_date):
         progress_bar.progress(i + 1)
     st.success("Models testing successfully!")
 
+# Function to forecast using prophet
 def prophet(ticker, start_date, end_date):
+    # Read the CSV file into a DataFrame
     file_path = f'./data/stock_price_data/{ticker}.csv'
     df = pd.read_csv(file_path, index_col='Date', parse_dates=True)
+
+    # Extract 'Close' column and reset the index
     df_prophet = df['Close'].reset_index()
+
+    # Rename the columns to match Prophet's requirements
     df_prophet.columns = ['ds', 'y']
     df_prophet['ds'] = pd.to_datetime(df_prophet['ds'])
     
+    # Create and fit the Prophet model using the training data
     model = Prophet()
     model.fit(df_prophet)
     
+    # Make future DataFrame for forecasting
     last_date = df_prophet['ds'].max()
     future_days = (pd.to_datetime(end_date) - last_date).days
     future = model.make_future_dataframe(periods=future_days)
     
+    # Forecast using the fitted model
     forecast = model.predict(future)
     
     # Select only 'ds' and 'yhat' for consistency with ARIMA model predictions
@@ -192,12 +204,20 @@ def prophet(ticker, start_date, end_date):
     
     st.write(f"Prophet model training and forecasting for {ticker} completed.")
 
+# Function to forecast using ARIMA
 def arima(ticker, start_date, end_date):
+    # Read the CSV file into a DataFrame
     file_path = f'./data/stock_price_data/{ticker}.csv'
     df = pd.read_csv(file_path, index_col='Date', parse_dates=True)
+
+    # Extract 'Close' column and reset the index
     df_arima = df['Close'].reset_index()
+
+    # Rename the columns for ARIMA and Convert the 'ds' column to datetime
     df_arima.columns = ['ds', 'y']
+    df_arima['ds'] = pd.to_datetime(df_arima['ds'])
     
+     # Fit ARIMA model using the training data with auto_arima
     model_auto_arima = auto_arima(df_arima['y'], start_p=1, start_q=1,
                                   test='adf',       
                                   max_p=3, max_q=3, 
@@ -211,14 +231,17 @@ def arima(ticker, start_date, end_date):
                                   suppress_warnings=True, 
                                   stepwise=True)    
 
+    # Forecast using the fitted ARIMA model
     last_date = df_arima['ds'].max()
     future_days = (pd.to_datetime(end_date) - last_date).days
     forecast, conf_int = model_auto_arima.predict(n_periods=future_days, return_conf_int=True)
     
+    # Filter predictions
     last_date = df_arima['ds'].iloc[-1]
     future_dates = pd.date_range(start=last_date + pd.Timedelta(days=1), periods=future_days, freq='D')
     forecast_df = pd.DataFrame({'ds': future_dates, 'yhat': forecast})
     
+    # Store the forecast in the session state
     if 'forecast_data' not in st.session_state:
         st.session_state.forecast_data = {}
     st.session_state.forecast_data[f'{ticker}_arima'] = forecast_df
@@ -236,6 +259,7 @@ def make_sequence_dataset(feature, label, window_size):
 
     return np.array(feature_list), np.array(label_list)
 
+# Function to forecast using LSTM
 def lstm(ticker, start_date, end_date):
     model_path = f'./models/{ticker}_lstm_model.h5'
 
@@ -268,9 +292,10 @@ def lstm(ticker, start_date, end_date):
     # Convert scaled features to numpy array
     feature_np = scaled_features.to_numpy()
     
-    # Assuming make_sequence_dataset is defined to create sequences for LSTM input
+    # Create sequences for LSTM input
     X, _ = make_sequence_dataset(feature_np, feature_np[:, 1], window_size=40)
 
+    # Load pre-trained LSTM model
     model = load_model(model_path)
     
     # Make predictions with the model
@@ -288,12 +313,14 @@ def lstm(ticker, start_date, end_date):
     future_dates = pd.date_range(start=start_date, periods=future_days, freq='D')
     forecast_df = pd.DataFrame({'ds': future_dates, 'yhat': predictions_denormalized})
     
+    # Store the forecast in the session state
     if 'forecast_data' not in st.session_state:
         st.session_state.forecast_data = {}
     st.session_state.forecast_data[f'{ticker}_lstm'] = forecast_df
     
     st.write(f"LSTM model training and forecasting for {ticker} completed.")
 
+# Function to forecast using GRU
 def gru(ticker, start_date, end_date):
     model_path = f'./models/{ticker}_gru_model.h5'
 
@@ -320,9 +347,10 @@ def gru(ticker, start_date, end_date):
     # Convert scaled features to numpy array
     feature_np = scaled_features.to_numpy()
     
-    # Assuming make_sequence_dataset is defined to create sequences for GRU input
+    # Create sequences for GRU input
     X, _ = make_sequence_dataset(feature_np, feature_np[:, 1], window_size=30)
 
+    # Load pre-trained GRU model
     model = load_model(model_path)
     
     # Make predictions with the model
@@ -340,13 +368,16 @@ def gru(ticker, start_date, end_date):
     future_dates = pd.date_range(start=start_date, periods=future_days, freq='D')
     forecast_df = pd.DataFrame({'ds': future_dates, 'yhat': predictions_denormalized})
     
+    # Store the forecast in the session state
     if 'forecast_data' not in st.session_state:
         st.session_state.forecast_data = {}
     st.session_state.forecast_data[f'{ticker}_gru'] = forecast_df
     
     st.write(f"GRU model training and forecasting for {ticker} completed.")
 
+# Function to show prediction of models including ensemble
 def show_predictions(ticker, start_date, end_date):
+    # Download stock data using yahoo finance api
     df_ticker = yf.download(ticker, end=end_date)
 
     if not pd.api.types.is_datetime64_any_dtype(df_ticker.index):
@@ -360,7 +391,7 @@ def show_predictions(ticker, start_date, end_date):
     model_weights_df = pd.read_csv('./model_weight.csv')
     weights = model_weights_df.loc[model_weights_df['TICKER'] == ticker, ['weight_prophet', 'weight_arima', 'weight_lstm', 'weight_gru']].squeeze()
 
-    # Prepare the figure
+    # Display the stock predictoin graph using plotly
     fig = go.Figure()
 
     # Update the layout of the figure
@@ -375,6 +406,7 @@ def show_predictions(ticker, start_date, end_date):
     # Plot the actual 'Close' prices for the filtered range
     fig.add_trace(go.Scatter(x=df_ticker['Date'], y=df_ticker['Close'], name='Close', mode='lines'))
 
+    # Define model color for consistency
     model_colors = {
     'prophet': '#1f77b4',
     'arima': '#2ca02c',
@@ -402,13 +434,17 @@ def show_predictions(ticker, start_date, end_date):
     # Sum the weighted predictions to get the ensemble prediction
     ensemble_predictions['ensemble'] = ensemble_predictions[['prophet', 'arima', 'lstm', 'gru']].sum(axis=1)
 
+    # Post-processing for forecasting
     # Adjusting the starting point of ensemble predictions to match the actual prices
     first_actual_close = df_ticker['Close'].iloc[0]  # First actual closing price in the selected date range
     
     if not ensemble_predictions.empty:
-        first_ensemble_pred = ensemble_predictions['ensemble'].iloc[0]  # First ensemble prediction
-        offset = first_actual_close - first_ensemble_pred  # Calculate the offset
-        ensemble_predictions['ensemble'] += offset  # Adjust ensemble predictions with the offset
+        # First ensemble prediction
+        first_ensemble_pred = ensemble_predictions['ensemble'].iloc[0]
+        # Calculate the offset
+        offset = first_actual_close - first_ensemble_pred
+        # Adjust ensemble predictions with the offset
+        ensemble_predictions['ensemble'] += offset  
         
         # Plot the adjusted ensemble predictions
         fig.add_trace(go.Scatter(x=ensemble_predictions['ds'], y=ensemble_predictions['ensemble'], name='Ensemble', mode='lines', line=dict(color=model_colors['ensemble'])))
@@ -441,18 +477,17 @@ def show_predictions(ticker, start_date, end_date):
         # Calculate MAPE
         mape = np.mean(np.abs((merged_for_mape['actual'] - merged_for_mape['predicted']) / merged_for_mape['actual'])) * 100
         
+        # Displya MAPE
         st.write(f'Ensemble Model MAPE for {ticker} on Test Set: {mape:.2f}%', unsafe_allow_html=True)
     
     # Display validation MAPE for ensemble model
     validation_mape = pd.read_csv('./validation_mape.csv')
-
     ticker_mape = validation_mape[validation_mape['TICKER'] == ticker]['MAPE'].values[0]
-
     st.write(f'Ensemble Model MAPE for {ticker} on Validation Set: {ticker_mape:.2f}%', unsafe_allow_html=True)
 
 # Function to load data and visualize it
 def load_data(ticker):
-    # Fetch company logo
+    # Fetch company logo if possible
     logo_url = f"https://eodhd.com/img/logos/US/{ticker}.png"
     try:
         logo_response = requests.get(logo_url)
@@ -461,7 +496,8 @@ def load_data(ticker):
             st.image(logo_image, width=100)
     except Exception:
         pass
-
+    
+    # Fetch stock information using yahoo finance API
     stock_info = yf.Ticker(str(ticker))
     stock_details = stock_info.info
 
@@ -473,6 +509,7 @@ def load_data(ticker):
         sector_name = stock_details['sector']
         st.write('Sector: %s' % sector_name) 
 
+        # Fetch and display the summary description of stock data
         st.write(f"Summary: {stock_details.get('longBusinessSummary', 'N/A')}")
 
         # Date range selection
@@ -483,10 +520,9 @@ def load_data(ticker):
         with end_date:
             end_date = st.date_input("End date", value=pd.to_datetime('today'))
 
-        # Fetch and display the stock data
+        # Fetch and display the historical stock data
         data = stock_info.history(start=start_date, end=end_date)
         fig = go.Figure()
-        # fig.add_trace(go.Scatter(x=data.index, y=data['Close'], mode='lines', name='Close Price'))
         fig.add_trace(go.Candlestick(x=data.index,open=data['Open'],high=data['High'],low=data['Low'],close=data['Close']))
         fig.update_layout(xaxis_rangeslider_visible=False)
         fig.update_layout(title=f'{ticker} Closing Price', xaxis_title='Date', yaxis_title='Price (USD)')
@@ -496,7 +532,10 @@ def load_data(ticker):
         return
 
     try:
+        # Train and test models
         st.subheader("Train and Test Models")
+
+        # Add data range for testing period that user can adjust
         st.write("Select data range for testing")
 
         col1, col2 = st.columns(2)
@@ -507,9 +546,10 @@ def load_data(ticker):
 
         # Button for train models
         if st.button("Test Models"):
+            # Forecasting using models
             test_models(ticker, start_date, end_date)
 
-            # Shoe model prediction
+            # Show model prediction
             show_predictions(ticker, start_date, end_date)
             
             # Show model weights
