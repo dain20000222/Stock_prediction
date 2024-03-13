@@ -51,7 +51,7 @@ def show_welcome_message():
     <div style="text-align: justify;">
     This dashboard presents the outcome of an ensemble model that combines time-series and deep learning models for stock price prediction. 
     <br><br>
-    The ensemble model is crafted by integrating Prophet, ARIMA, LSTM, and GRU models, each weighted based on their Mean Absolute Percentage Error (MAPE), Mean Squared Error (MSE), and Directional Accuracy evaluated during the validation process. 
+    The ensemble model is crafted by integrating Prophet, ARIMA, LSTM, and GRU models, each weighted based on their Mean Absolute Percentage Error (MAPE), Mean Squared Error (MSE), and Mean Directional Accuracy (MDA) evaluated during the validation process. 
     <br><br>     
     Models are trained with data up to 2023/11/10
     <br><br>
@@ -144,7 +144,7 @@ def show_model_performance(ticker):
             with col:
                 st.metric(label=f"{model_name} MAPE", value=f"{ticker_metrics['mape']:.2f}%")
                 st.metric(label=f"{model_name} MSE", value=f"{ticker_metrics['mse']:.2f}")
-                st.metric(label=f"{model_name} Directional Accuracy", value=f"{ticker_metrics['directional_accuracy']:.2f}%")
+                st.metric(label=f"{model_name} MDA", value=f"{ticker_metrics['directional_accuracy']:.2f}%")
         
         except FileNotFoundError:
             st.error(f"The file for {model_name} could not be found. Please check the file path and name.")

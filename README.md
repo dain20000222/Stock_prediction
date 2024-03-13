@@ -1,7 +1,7 @@
 # Stock Prediction Project
 
 ## Overview
-This project encompasses a comprehensive approach to stock prediction utilizing a Jupyter notebook (`stock_prediction.ipynb`) for model training and validation, alongside a Streamlit-based GUI (`dashboard.py`) for displaying real-time forecast results. The project aims to provide an insightful forecast of stock prices, leveraging the power of ensemble models and real-time data acquisition.
+This project encompasses a comprehensive approach to stock prediction utilizing a Jupyter notebook (`stock_prediction.ipynb`) for model training and validation, alongside a Streamlit-based GUI (`dashboard.py`) for displaying real-time forecast results. All files used in this project including datasets can be found at [https://drive.google.com/drive/folders/1oZlnt78J-hI4Z_nDl6OpbhtERlsKNM0m?usp=sharing](https://drive.google.com/drive/folders/1oZlnt78J-hI4Z_nDl6OpbhtERlsKNM0m?usp=sharing).
 
 ### stock_prediction.ipynb
 The `stock_prediction.ipynb` notebook is designed to run in Google Colab. 
@@ -14,3 +14,4 @@ The `dashboard.py` script utilizes Streamlit to create a user-friendly GUI, allo
 - By integrating the yfinance API, the dashboard fetches real-time stock data, enabling users to view forecast results over their desired time frames. 
 - This interactive platform democratizes access to sophisticated stock forecasts, empowering users to make informed decisions based on the ensemble model's insights.
 - Fashboard is deployed at [https://stock-prediction-dainkim.streamlit.app/](https://stock-prediction-dainkim.streamlit.app/).
+
