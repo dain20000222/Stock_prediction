@@ -13,5 +13,5 @@ The `stock_prediction.ipynb` notebook is designed to run in Google Colab.
 The `dashboard.py` script utilizes Streamlit to create a user-friendly GUI, allowing users to interact with the predictive models in real-time. 
 - By integrating the yfinance API, the dashboard fetches real-time stock data, enabling users to view forecast results over their desired time frames. 
 - This interactive platform democratizes access to sophisticated stock forecasts, empowering users to make informed decisions based on the ensemble model's insights.
-- Fashboard is deployed at [https://stock-prediction-dainkim.streamlit.app/](https://stock-prediction-dainkim.streamlit.app/).
+- Dashboard is deployed at [https://stock-prediction-dainkim.streamlit.app/](https://stock-prediction-dainkim.streamlit.app/).
 
