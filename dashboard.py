@@ -29,13 +29,13 @@ sectors = {
     "💻 Technologies": ["MSFT", "AAPL", "NVDA", "AVGO", "ORCL", "CRM", "AMD", "ADBE", "ACN", "CSCO"],
     "💰 Financial Services": ["BRK-B", "JPM", "V", "MA", "BAC", "WFC", "BX", "MS", "GS"],
     "🏥 Health Care" : ["LLY", "UNH", "JNJ", "MRK", "ABBV", "TMO", "ABT", "DHR", "PFE", "AMGN"],
-    "🛍️ Consumer Cyclical": ["AMZN", "TSLA", "HD", "MCD", "NIKE", "LOW", "BKNG", "TJX", "SBUX", "ABNB"],
-    "🏭 Industrials": ["GE", "CAT", "UNP", "HON", "UPS", "BA", "RTX", "ETN", "ADP", "LMT"],
-    "📱 Communication Services": ["GOOG", "META", "NFLX", "DIS", "TMUS", "VZ", "CMCSA", "T"],
-    "🏪 Consumer Defensive": ["WMT", "PG", "COST", "KO", "PEP", "PM", "MDLZ", "MO", "CL", "TGT"],
+    "🛍️ Consumer Cyclical": ["AMZN", "TSLA", "HD", "MCD", "NKE", "LOW", "BKNG", "TJX", "SBUX", "ABNB"],
+    "🏭 Industrials": ["GE", "CAT", "UNP", "HON", "UPS", "BA", "RTX", "ADP", "LMT", "DE"],
+    "📱 Communication Services": ["GOOG", "META", "NFLX", "DIS", "TMUS", "VZ", "CMCSA", "T", "CHTR"],
+    "🏪 Consumer Defensive": ["WMT", "PG", "COST", "KO", "PEP", "PM", "MDLZ", "MO", "CL", "MNST"],
     "🔋 Energy": ["XOM", "CVX", "COP", "SLB", "EOG", "PSX", "MPC", "EPD", "PXD", "OXY"],
-    "🔧 Basic materials": [ "LIN", "SHW", "SCCO", "ECL", "CRH", "FCX", "APD", "NUE", "DOW"],
-    "🏢 Real Estate": ["PLD", "AMT", "EQIX", "SPG", "WELL", "PSA", "CCI", "O", "DLR", "CSGP"],
+    "🔧 Basic materials": [ "LIN", "SHW", "SCCO", "ECL", "CRH", "FCX", "APD", "NUE", "DOW", "CTVA"],
+    "🏢 Real Estate": ["PLD", "AMT", "EQIX", "WELL", "PSA", "CCI", "O", "DLR", "CSGP"],
     "⚙️ Utilities": ["NEE", "SO", "DUK", "SRE", "AEP", "PCG", "CEG", "D", "EXC", "XEL"]
 }
 
@@ -507,13 +507,13 @@ def load_data(ticker):
     # Exander for details of stock from yahoo finance
     with st.expander(f"Stock Details for {ticker}"):
         sector_name = stock_details['sector']
-        st.write('Sector: %s' % sector_name) 
+        st.write('**Sector: %s**' % sector_name) 
 
         # Fetch and display the summary description of stock data
         st.write(f"Summary: {stock_details.get('longBusinessSummary', 'N/A')}")
 
         # Date range selection
-        st.write("**Select Date Range for Stock Data**")
+        st.write("**Select Date Range for Historical Stock Data Chart**")
         start_date, end_date = st.columns(2)
         with start_date:
             start_date = st.date_input("Start date", value=pd.to_datetime('2023-11-13'))
