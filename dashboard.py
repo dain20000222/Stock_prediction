@@ -7,7 +7,6 @@ from datetime import datetime
 import time
 from prophet import Prophet
 import joblib
-# from keras.models import load_model
 from tensorflow.keras.models import load_model
 from pmdarima.arima import auto_arima
 from io import BytesIO
@@ -98,7 +97,7 @@ if st.sidebar.button('Submit Ticker'):
 # Add UoM logo in the sidebar
 with st.sidebar:
     st.markdown("""
-    <br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br>
+    <br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br>
     """, unsafe_allow_html=True)
     st.image('uomlogo.png', use_column_width=True)
 
@@ -127,7 +126,7 @@ def show_model_weights(ticker):
 
 # Function to load and show model performance metrics
 def show_model_performance(ticker):
-    st.write(f"##### Model performance metrics for {ticker}:", unsafe_allow_html=True)
+    st.write(f"##### Individual Model performance metrics for {ticker}:", unsafe_allow_html=True)
     
     # Define the layout: one column for each model
     col_prophet, col_arima, col_lstm, col_gru = st.columns(4)
@@ -476,14 +475,36 @@ def show_predictions(ticker, start_date, end_date):
         
         # Calculate MAPE
         mape = np.mean(np.abs((merged_for_mape['actual'] - merged_for_mape['predicted']) / merged_for_mape['actual'])) * 100
+        mse = np.mean(np.square(merged_for_mape['actual'] - merged_for_mape['predicted']))
+        mda = np.mean((np.sign(merged_for_mape['actual'] - merged_for_mape['actual'].shift(1)) == np.sign(merged_for_mape['predicted'] - merged_for_mape['actual'].shift(1)))[1:]) * 100
         
-        # Displya MAPE
-        st.write(f'Ensemble Model MAPE for {ticker} on Test Set: {mape:.2f}%', unsafe_allow_html=True)
-    
-    # Display validation MAPE for ensemble model
-    validation_mape = pd.read_csv('./validation_mape.csv')
-    ticker_mape = validation_mape[validation_mape['TICKER'] == ticker]['MAPE'].values[0]
-    st.write(f'Ensemble Model MAPE for {ticker} on Validation Set: {ticker_mape:.2f}%', unsafe_allow_html=True)
+        daily_returns = merged_for_mape['predicted'].pct_change(1)
+        sharpe_ratio = daily_returns.mean() / daily_returns.std() * np.sqrt(252)
+
+        cumulative_returns = (1 + daily_returns).cumprod()
+        peak = cumulative_returns.expanding(min_periods=1).max()
+        drawdown = (cumulative_returns - peak) / peak
+        mdd = drawdown.min() * 100
+
+        cumulative_return = (cumulative_returns.iloc[-1] - 1) * 100
+
+        # Disply accuracy indices
+        st.write(f"##### Ensemble model performance metrics for {ticker}:", unsafe_allow_html=True)
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            st.metric(label=f"MAPE", value=f"{mape:.2f}%")
+            st.metric(label=f"Sharpe Ratio", value=f"{sharpe_ratio:.2f}")
+            
+
+        with col2:
+            st.metric(label=f"MSE", value=f"{mse:.2f}")
+            st.metric(label=f"Maximum Drawdown", value=f"{mdd:.2f}%")
+
+        with col3:
+            st.metric(label=f"MDA", value=f"{mda:.2f}%")
+            st.metric(label=f"Cumulative Returns", value=f"{cumulative_return:.2f}%")
+            
 
 # Function to load data and visualize it
 def load_data(ticker):
@@ -533,10 +554,10 @@ def load_data(ticker):
 
     try:
         # Train and test models
-        st.subheader("Train and Test Models")
+        st.subheader("Test Models")
 
         # Add data range for testing period that user can adjust
-        st.write("Select data range for testing")
+        st.write("Select data range for forecasting")
 
         col1, col2 = st.columns(2)
         with col1:
