@@ -473,7 +473,7 @@ def show_predictions(ticker, start_date, end_date):
         ensemble_for_mape = ensemble_predictions[['ds', 'ensemble']].rename(columns={'ensemble': 'predicted'})
         merged_for_mape = pd.merge(df_ticker_for_mape, ensemble_for_mape, on='ds', how='inner')
         
-        # Calculate MAPE
+        # Calculate accuracy indices
         mape = np.mean(np.abs((merged_for_mape['actual'] - merged_for_mape['predicted']) / merged_for_mape['actual'])) * 100
         mse = np.mean(np.square(merged_for_mape['actual'] - merged_for_mape['predicted']))
         mda = np.mean((np.sign(merged_for_mape['actual'] - merged_for_mape['actual'].shift(1)) == np.sign(merged_for_mape['predicted'] - merged_for_mape['actual'].shift(1)))[1:])
