@@ -476,7 +476,7 @@ def show_predictions(ticker, start_date, end_date):
         # Calculate MAPE
         mape = np.mean(np.abs((merged_for_mape['actual'] - merged_for_mape['predicted']) / merged_for_mape['actual'])) * 100
         mse = np.mean(np.square(merged_for_mape['actual'] - merged_for_mape['predicted']))
-        mda = np.mean((np.sign(merged_for_mape['actual'] - merged_for_mape['actual'].shift(1)) == np.sign(merged_for_mape['predicted'] - merged_for_mape['actual'].shift(1)))[1:]) * 100
+        mda = np.mean((np.sign(merged_for_mape['actual'] - merged_for_mape['actual'].shift(1)) == np.sign(merged_for_mape['predicted'] - merged_for_mape['actual'].shift(1)))[1:])
         
         daily_returns = merged_for_mape['predicted'].pct_change(1)
         sharpe_ratio = daily_returns.mean() / daily_returns.std() * np.sqrt(252)
