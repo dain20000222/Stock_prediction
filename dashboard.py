@@ -97,7 +97,7 @@ if st.sidebar.button('Submit Ticker'):
 # Add UoM logo in the sidebar
 with st.sidebar:
     st.markdown("""
-    <br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br>
+    <br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br>
     """, unsafe_allow_html=True)
     st.image('uomlogo.png', use_column_width=True)
 
