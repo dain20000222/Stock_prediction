@@ -393,9 +393,6 @@ def show_predictions(ticker, start_date, end_date):
     # Display the stock predictoin graph using plotly
     fig = go.Figure()
 
-    # Update the layout of the figure
-    fig.update_layout(title_text=f"Stock Price Prediction from {start_date} to {end_date}", xaxis_title='Date', yaxis_title='Price')
-
     start_date = pd.to_datetime(start_date)
     end_date = pd.to_datetime(end_date)
 
@@ -433,37 +430,58 @@ def show_predictions(ticker, start_date, end_date):
     # Sum the weighted predictions to get the ensemble prediction
     ensemble_predictions['ensemble'] = ensemble_predictions[['prophet', 'arima', 'lstm', 'gru']].sum(axis=1)
 
-    # Post-processing for forecasting
-    # Adjusting the starting point of ensemble predictions to match the actual prices
-    first_actual_close = df_ticker['Close'].iloc[0]  # First actual closing price in the selected date range
-    
+    # Use the last actual close price for adjusting the predictions
+    last_actual_close = df_ticker['Close'].iloc[-1]  # Use last closing price
+
+    # Adjust ensemble predictions with the offset
     if not ensemble_predictions.empty:
-        # First ensemble prediction
-        first_ensemble_pred = ensemble_predictions['ensemble'].iloc[0]
-        # Calculate the offset
-        offset = first_actual_close - first_ensemble_pred
-        # Adjust ensemble predictions with the offset
-        ensemble_predictions['ensemble'] += offset  
+        # Convert 'ds' to datetime if not already
+        ensemble_predictions['ds'] = pd.to_datetime(ensemble_predictions['ds'])
+
+        # Ensure today's date is in datetime format and normalized (time set to 00:00:00)
+        today_date = pd.to_datetime('today').normalize()
+
+        today_ensemble_pred = ensemble_predictions[ensemble_predictions['ds'] == today_date]
+
+        if today_ensemble_pred.empty:
+            today_ensemble_pred = ensemble_predictions[ensemble_predictions['ds'] > today_date].head(1)
+
+        if not today_ensemble_pred.empty:
+            # Get the ensemble prediction for today (or the closest future date if today is not available)
+            last_ensemble_pred = today_ensemble_pred['ensemble'].iloc[0]
+
+            # Calculate the offset using the last actual close price
+            offset = last_actual_close - last_ensemble_pred
+
+            # Apply the offset to all ensemble predictions
+            ensemble_predictions['ensemble'] += offset
+        
+        ensemble_forecast = ensemble_predictions[(ensemble_predictions['ds'] >= pd.to_datetime('today')) & (ensemble_predictions['ds'] <= end_date)].copy()
         
         # Plot the adjusted ensemble predictions
-        fig.add_trace(go.Scatter(x=ensemble_predictions['ds'], y=ensemble_predictions['ensemble'], name='Ensemble', mode='lines', line=dict(color=model_colors['ensemble'])))
+        fig.add_trace(go.Scatter(x=ensemble_forecast['ds'], y=ensemble_forecast['ensemble'], name='Ensemble', mode='lines', line=dict(color=model_colors['ensemble'])))
 
-    # Adjusting individual model predictions to match the starting point of actual prices
+    # Adjusting individual model predictions to match the last point of actual prices
     for model_name in ['prophet', 'arima', 'lstm', 'gru']:
         model_key = f'{ticker}_{model_name}'
         if model_key in st.session_state.get('forecast_data', {}):
             forecast_data = st.session_state.forecast_data[model_key]
-            forecast_filtered = forecast_data[(forecast_data['ds'] >= start_date) & (forecast_data['ds'] <= end_date)].copy()
+            forecast_filtered = forecast_data[(forecast_data['ds'] >= pd.to_datetime('today')) & (forecast_data['ds'] <= end_date)].copy()
             
             if not forecast_filtered.empty:
                 first_forecast_value = forecast_filtered['yhat'].iloc[0]
-                offset = first_actual_close - first_forecast_value  # Calculate offset for each model
+                offset = last_actual_close - first_forecast_value  # Use last closing price for offset
                 
                 forecast_filtered['yhat_adjusted'] = forecast_filtered['yhat'] + offset  # Apply the offset
                 
                 # Plot the adjusted forecast data
                 fig.add_trace(go.Scatter(x=forecast_filtered['ds'], y=forecast_filtered['yhat_adjusted'], name=model_name.upper(), mode='lines', line=dict(color=model_colors[model_name]), visible="legendonly"))
 
+    fig.add_vrect(
+            x0= pd.to_datetime('today'), x1= end_date,
+            fillcolor="yellow", opacity=0.1, line_width=0
+        )
+    
     # Display the figure
     st.plotly_chart(fig)
 
