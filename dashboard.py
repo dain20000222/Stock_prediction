@@ -477,9 +477,20 @@ def show_predictions(ticker, start_date, end_date):
                 # Plot the adjusted forecast data
                 fig.add_trace(go.Scatter(x=forecast_filtered['ds'], y=forecast_filtered['yhat_adjusted'], name=model_name.upper(), mode='lines', line=dict(color=model_colors[model_name]), visible="legendonly"))
 
+    fig.update_layout(
+        title={
+            'text': f"Stock Price Prediction for {ticker}",
+            'y':0.9,
+            'x':0.5,
+            'xanchor': 'center',
+            'yanchor': 'top'},
+        xaxis_title="Date",
+        yaxis_title="Price",
+    )
+    
     fig.add_vrect(
             x0= pd.to_datetime('today'), x1= end_date,
-            fillcolor="yellow", opacity=0.1, line_width=0
+            fillcolor="yellow", opacity=0.1, line_width=0,
         )
     
     # Display the figure
@@ -579,9 +590,11 @@ def load_data(ticker):
 
         col1, col2 = st.columns(2)
         with col1:
-            start_date = st.date_input("Start Date", value=pd.to_datetime('2023-11-13'))
+            start_date = st.date_input("Start Date", value=pd.to_datetime('today'))
         with col2:
             end_date = st.date_input("End Date", value=pd.to_datetime('today'))
+
+        start_date = pd.to_datetime('2023-11-13')
 
         # Button for train models
         if st.button("Test Models"):
